@@ -1,3 +1,4 @@
+pan12_dataset/*.json filter=lfs diff=lfs merge=lfs -text
 v2/AML_project/debug_p9/analysis_test.json filter=lfs diff=lfs merge=lfs -text
 v2/AML_project/debug_p9/debug_test_all.txt filter=lfs diff=lfs merge=lfs -text
 v2/AML_project/pan12_dataset/test.json filter=lfs diff=lfs merge=lfs -text
