@@ -220,7 +220,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"device using: {device}")
-    if device.type == "cude":
+    if device.type == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     out = Path(OUTPUT_DIR)
