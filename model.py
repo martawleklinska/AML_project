@@ -26,13 +26,28 @@ PATIENCE = 3
 BETA = 2.
 DROPOUT = 0.3
 
-# =============== METRICS
+# =============== METRICS===================
+"""
+as overlooking the groomer is much more dangerous, we will introduce F2 (beta == 2)
+recall is two times more important for us than precision
+"""
 def f_beta(precision: float, recall: float, beta:float = BETA) -> float:
     denom = beta * beta * precision + recall
     if denom == 0.:
         return 0.
     return (1 + beta * beta) * precision * recall / denom
 
+"""
+We will distinguish 4 cases:
+1. TP - true positive - model says grooming and was right
+2. TN - true negative - model says not grooming and was right
+3. FP - false posisite - model says grooming, but was wrong
+4. FN - false negative - model says not grooming, but was wrong
+
+Thus we will compute 
+- precision = TP / (TP + FP) - how many alarms were correct
+- recall = TP / (TP + FN) - how many groomings were identified
+"""
 def compute_metrics(probs: np.ndarray, labels: np.ndarray, threshold: float = 0.5) -> dict:
     preds = (probs >= threshold).astype(int)
     tp = int(((preds == 1) & (labels == 1)).sum())
@@ -50,6 +65,9 @@ def compute_metrics(probs: np.ndarray, labels: np.ndarray, threshold: float = 0.
             "fn": fn,
             "threshold": threshold,}
 
+"""
+Threshold decides which value is decided as a definite grooming.
+"""
 def calibrate_threshold(probs: np.ndarray, labels: np.ndarray) -> float:
     """
     grid search: [0.05, 0.95] every 0.01 - we are looking for a threshold maximizing f2
@@ -75,6 +93,8 @@ class GroomingDataset(Dataset):
     """
     Load records from jSON and tokenises the text.
     The tokens [RISK: HIGH], [ESC:1] go to the tokenizer and DistilBERT learns them from context
+    input: lists
+    output: __getitem__ - tokenize one text and return tensors 
     """
 
     def __init__(self, texts: list, labels: list, tokenizer, max_length: int):
@@ -96,7 +116,7 @@ class GroomingDataset(Dataset):
         )
         return {
             "input_ids":      enc["input_ids"].squeeze(0),
-            "attention_mask": enc["attention_mask"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0), # token (1) or padding (0)
             "label":          torch.tensor(self.labels[idx], dtype=torch.float32),
         }
     
@@ -111,15 +131,15 @@ class GroomingClassified(nn.Module):
 
     def __init__(self, base_model_name: str, dropout: float = DROPOUT):
         super().__init__()
-        self.bert = AutoModel.from_pretrained(base_model_name)
+        self.bert = AutoModel.from_pretrained(base_model_name) # getting neural network with 67 million params
         hidden_size = self.bert.config.hidden_size
 
         self.classifier = nn.Sequential(
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(256, 1),
+            nn.Dropout(dropout), # randomly zeroing 0.3 neurons (overfitting)
+            nn.Linear(hidden_size, 256), # squeezing
+            nn.ReLU(), # nonlinearity
+            nn.Dropout(dropout), 
+            nn.Linear(256, 1), # logit
         )
 
     def forward(self, input_ids, attention_mask):
@@ -134,13 +154,15 @@ class GroomingClassified(nn.Module):
 # ==== CLASS WEIGHTS = compensation unbalanced dataset
 def make_pos_weight(labels: list, device: torch.device) -> torch.Tensor:
     """
+    BCE - Binary cross entropy = loss func
+    The function overemphasises the importance of grooming recognition
     BCEWithLogitsLoss takes pos_weight = N_neg / N_pos * scale
     Scale = 2. additionally makes the kara worse for missing grooming (FN)
     """
     n_pos = sum(labels)
     n_neg = len(labels) - n_pos
     if n_pos == 0:
-        raise ValueError("Brak pozytywnych próbek w zbiorze treningowym!")
+        raise ValueError("No positive data in the training set!")
     pos_weight = 2.0 * (n_neg / n_pos)
     print(f"  Pos weight: {pos_weight:.2f}  (N_neg={n_neg}, N_pos={n_pos})")
     return torch.tensor([pos_weight], device=device)
@@ -166,7 +188,7 @@ def run_epoch(
 
         if step % grad_accum == 0:
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            optimizer.step()
+            optimizer.step() # get weights aftyer N batches
             scheduler.step()
             optimizer.zero_grad()
         
@@ -179,9 +201,9 @@ def run_epoch(
 
     return total_loss / len(loader)
 
-@torch.no_grad()
+@torch.no_grad() # turning off calculating the gradients
 def evaluate(model, loader, device, threshold = 0.5) -> tuple:
-    model.eval()
+    model.eval() # removing dropout
     all_probs, all_labels = [], []
 
     for batch in loader:
@@ -220,7 +242,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"device using: {device}")
-    if device.type == "cude":
+    if device.type == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     out = Path(OUTPUT_DIR)
@@ -254,10 +276,10 @@ def main():
     val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False,
                               num_workers=2, pin_memory=(device.type=="cuda"))
 
-    # --- Loss z wagowaniem ---
+    # ============== Loss with weights ============
     pos_weight = make_pos_weight(train_labels, device)
     loss_fn    = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    # BCEWithLogitsLoss = Sigmoid + BCE — numerycznie stabilniejsze niż oddzielnie
+    # BCEWithLogitsLoss = Sigmoid + BCE -- more stable like this
 
     # --- Optimizer + scheduler ---
     optimizer = torch.optim.AdamW(
@@ -272,7 +294,7 @@ def main():
 
     print(f"\n  Steps all: {total_steps}  Warmup: {warmup_steps}")
 
-    # --- Pętla treningowa ---
+    # =========== training loop ================
     best_f2, best_thresh, no_improve = 0.0, 0.5, 0
     best_ckpt = str(out / "best_model.pt")
 
@@ -287,7 +309,7 @@ def main():
             loss_fn, device, GRAD_CLIP, GRAD_ACCUM,
         )
 
-        # Ewaluacja na val
+        # evaluation on val
         _, val_probs, val_labels_np = evaluate(model, val_loader, device)
         thresh = calibrate_threshold(val_probs, val_labels_np)
         m      = compute_metrics(val_probs, val_labels_np, thresh)
@@ -300,7 +322,7 @@ def main():
 
         if m["f2"] > best_f2:
             best_f2, best_thresh, no_improve = m["f2"], thresh, 0
-            # Zapisujemy tylko wagi modelu (lżej niż cały checkpoint)
+            # saving only weights of the model (lighter than whole checkpoint)
             torch.save({
                 "model_state_dict": model.state_dict(),
                 "config": {
@@ -315,13 +337,14 @@ def main():
         else:
             no_improve += 1
             if no_improve >= PATIENCE:
-                print(f"\n  Early stopping after epoch {epoch} (nothing better  {PATIENCE} epoch)")
+                print(f"\n  Early stopping after epoch {epoch} (nothing better on patience  {PATIENCE} epoch)")
                 break
 
-    # --- Ewaluacja on test ---
-    print("\n--- test evaluation ---")
+    # =============== eval on test ======================
+    print("\n============= test evaluation ===========")
+    print("how many ones are in test_labels?:", sum(test_labels)) 
 
-    # Wczytaj najlepszy model
+    # load the best model
     checkpoint = torch.load(best_ckpt, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
