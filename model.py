@@ -254,10 +254,10 @@ def main():
     val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False,
                               num_workers=2, pin_memory=(device.type=="cuda"))
 
-    # --- Loss z wagowaniem ---
+    # ============== Loss with weights ============
     pos_weight = make_pos_weight(train_labels, device)
     loss_fn    = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    # BCEWithLogitsLoss = Sigmoid + BCE — numerycznie stabilniejsze niż oddzielnie
+    # BCEWithLogitsLoss = Sigmoid + BCE -- more stable like this
 
     # --- Optimizer + scheduler ---
     optimizer = torch.optim.AdamW(
@@ -272,7 +272,7 @@ def main():
 
     print(f"\n  Steps all: {total_steps}  Warmup: {warmup_steps}")
 
-    # --- Pętla treningowa ---
+    # =========== training loop ================
     best_f2, best_thresh, no_improve = 0.0, 0.5, 0
     best_ckpt = str(out / "best_model.pt")
 
@@ -287,7 +287,7 @@ def main():
             loss_fn, device, GRAD_CLIP, GRAD_ACCUM,
         )
 
-        # Ewaluacja na val
+        # evaluation on val
         _, val_probs, val_labels_np = evaluate(model, val_loader, device)
         thresh = calibrate_threshold(val_probs, val_labels_np)
         m      = compute_metrics(val_probs, val_labels_np, thresh)
@@ -300,7 +300,7 @@ def main():
 
         if m["f2"] > best_f2:
             best_f2, best_thresh, no_improve = m["f2"], thresh, 0
-            # Zapisujemy tylko wagi modelu (lżej niż cały checkpoint)
+            # saving only weights of the model (lighter than whole checkpoint)
             torch.save({
                 "model_state_dict": model.state_dict(),
                 "config": {
@@ -315,13 +315,14 @@ def main():
         else:
             no_improve += 1
             if no_improve >= PATIENCE:
-                print(f"\n  Early stopping after epoch {epoch} (nothing better  {PATIENCE} epoch)")
+                print(f"\n  Early stopping after epoch {epoch} (nothing better on patience  {PATIENCE} epoch)")
                 break
 
-    # --- Ewaluacja on test ---
-    print("\n--- test evaluation ---")
+    # =============== eval on test ======================
+    print("\n============= test evaluation ===========")
+    print("how many ones are in test_labels?:", sum(test_labels)) 
 
-    # Wczytaj najlepszy model
+    # load the best model
     checkpoint = torch.load(best_ckpt, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
