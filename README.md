@@ -4,6 +4,8 @@ Advanced Machine Learning Project on AGH course.
 
 Research implementation accompanying the conspectus *"Online Grooming Detection System for Parental Monitoring Software"* (May 2026).
 
+The aim of the project is to classify the conversation as possible grooming (1) or not (0).
+
 
 The details can be found in the PreprocessingREADME.md file
 
