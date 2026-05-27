@@ -89,15 +89,15 @@ class GroomingDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         enc = self.tokenizer(
             self.texts[idx],
-            max_length = self.max_length,
-            padding = "max_length",
-            truncation = True,
-            return_rensors = "pt",
+            max_length=self.max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
         )
         return {
-            "input_ids" : enc["input_ids"].squeeze(0),
-            "attention_mask" : enc["attention_mask"].squeeze(0),
-            "label" : torch.tensor(self.labels[idx], dtype = torch.float32),
+            "input_ids":      enc["input_ids"].squeeze(0),
+            "attention_mask": enc["attention_mask"].squeeze(0),
+            "label":          torch.tensor(self.labels[idx], dtype=torch.float32),
         }
     
 ## =========== MODEL =============
