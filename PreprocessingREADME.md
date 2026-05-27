@@ -253,6 +253,12 @@ python visualize.py
 
 ---
 
+### Step 6 - Creating a model and training
+```bash
+python model.py
+```
+
+
 ## Dataset: PAN 2012
 
 | Property | Value |
