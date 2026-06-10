@@ -484,29 +484,29 @@ def _conv_risk_score(
 #         # role = "[PRED]" if msg["is_pred"] else "[USER]"
 #         role = "[MSG]"
 #         # if msg["is_pred"]:
-#         matches  = _RULE_ENGINE.match(norm)
-#         max_sev  = max((m.severity for m in matches), default=0)
-#         cats_hit = {m.category for m in matches}
-#         # Update category counts
-#         for cat in cats_hit:
-#             cat_counts[cat] = cat_counts.get(cat, 0) + 1
-#         # Store for structural analysis
-#         pred_msgs.append({
-#             "conv_idx": conv_idx,
-#             "max_sev":  max_sev,
-#             "cats":     cats_hit,
-#             "matches":  matches,
-#         })
-#         # Build rule tags (deduplicated per category+severity)
-#         seen: set = set()
-#         tags: list[str] = []
-#         for m in matches:
-#             key = (m.category, m.severity)
-#             if key not in seen:
-#                 seen.add(key)
-#                 tags.append(f"[RULE:{m.category}:{m.severity}]")
-#         rule_prefix = (" ".join(tags) + " ") if tags else ""
-#         parts.append(f"{role} {rule_prefix}{norm}")
+#           matches  = _RULE_ENGINE.match(norm)
+#           max_sev  = max((m.severity for m in matches), default=0)
+#           cats_hit = {m.category for m in matches}
+#           # Update category counts
+#           for cat in cats_hit:
+#               cat_counts[cat] = cat_counts.get(cat, 0) + 1
+#           # Store for structural analysis
+#           pred_msgs.append({
+#               "conv_idx": conv_idx,
+#               "max_sev":  max_sev,
+#               "cats":     cats_hit,
+#               "matches":  matches,
+#           })
+#           # Build rule tags (deduplicated per category+severity)
+#           seen: set = set()
+#           tags: list[str] = []
+#           for m in matches:
+#               key = (m.category, m.severity)
+#               if key not in seen:
+#                   seen.add(key)
+#                   tags.append(f"[RULE:{m.category}:{m.severity}]")
+#           rule_prefix = (" ".join(tags) + " ") if tags else ""
+#           parts.append(f"{role} {rule_prefix}{norm}")
 #         # else:
 #         #     parts.append(f"{role} {norm}")
 
