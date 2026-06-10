@@ -456,78 +456,84 @@ def _conv_risk_score(
     return score, level, breakdown
 
 
-def flatten(messages: list) -> str:
-    """
-    Build role-tagged, rule-annotated, normalised conversation string.
+# def flatten(messages: list) -> str:
+#     """
+#     Build role-tagged, rule-annotated, normalised conversation string.
 
-    Prefix tokens (at [CLS] position):
-      [RISK:HIGH] [CATS:isolation,sexual_content] [ESC:1] [ARC:1] [DOM:1]
+#     Prefix tokens (at [CLS] position):
+#       [RISK:HIGH] [CATS:isolation,sexual_content] [ESC:1] [ARC:1] [DOM:1]
 
-    ESC=1  -> severity escalated in second half
-    ARC=1  -> trust-building -> solicitation arc detected
-    DOM=1  -> predator dominates message count (>60%)
+#     ESC=1  -> severity escalated in second half
+#     ARC=1  -> trust-building -> solicitation arc detected
+#     DOM=1  -> predator dominates message count (>60%)
 
-    Per-message rule tags (PRED messages only):
-      [PRED] [RULE:image_solicitation:3] [RULE:isolation:2] send me a pic
-    """
-    cat_counts: dict[str, int] = {}
-    pred_msgs:  list[dict]     = []
-    parts:      list[str]      = []
-    total_msgs  = 0
+#     Per-message rule tags (PRED messages only):
+#       [PRED] [RULE:image_solicitation:3] [RULE:isolation:2] send me a pic
+#     """
+#     cat_counts: dict[str, int] = {}
+#     pred_msgs:  list[dict]     = []
+#     parts:      list[str]      = []
+#     total_msgs  = 0
 
-    for conv_idx, msg in enumerate(messages):
+#     for conv_idx, msg in enumerate(messages):
+#         norm = normalise(msg["text_raw"])
+#         if not norm:
+#             continue
+
+#         total_msgs += 1
+#         # role = "[PRED]" if msg["is_pred"] else "[USER]"
+#         role = "[MSG]"
+#         # if msg["is_pred"]:
+#           matches  = _RULE_ENGINE.match(norm)
+#           max_sev  = max((m.severity for m in matches), default=0)
+#           cats_hit = {m.category for m in matches}
+#           # Update category counts
+#           for cat in cats_hit:
+#               cat_counts[cat] = cat_counts.get(cat, 0) + 1
+#           # Store for structural analysis
+#           pred_msgs.append({
+#               "conv_idx": conv_idx,
+#               "max_sev":  max_sev,
+#               "cats":     cats_hit,
+#               "matches":  matches,
+#           })
+#           # Build rule tags (deduplicated per category+severity)
+#           seen: set = set()
+#           tags: list[str] = []
+#           for m in matches:
+#               key = (m.category, m.severity)
+#               if key not in seen:
+#                   seen.add(key)
+#                   tags.append(f"[RULE:{m.category}:{m.severity}]")
+#           rule_prefix = (" ".join(tags) + " ") if tags else ""
+#           parts.append(f"{role} {rule_prefix}{norm}")
+#         # else:
+#         #     parts.append(f"{role} {norm}")
+
+#     # Compute full risk score
+#     score, level, bd = _conv_risk_score(cat_counts, pred_msgs, total_msgs)
+
+#     # Structural signal tokens
+#     esc_tok = "[ESC:1]" if bd["escal"] > 0 else "[ESC:0]"
+#     arc_tok = "[ARC:1]" if bd["arc"]   > 0 else "[ARC:0]"
+#     dom_tok = "[DOM:1]" if bd["dominance"] > 0 else "[DOM:0]"
+
+#     active_cats = sorted(cat_counts.keys())
+#     cats_str    = ",".join(active_cats) if active_cats else "none"
+#     prefix      = f"[RISK:{level}] [CATS:{cats_str}] {esc_tok} {arc_tok} {dom_tok}"
+
+#     body = " [SEP] ".join(parts)
+#     return f"{prefix} {body}" if body else prefix
+def flatten(messages):
+    parts = []
+
+    for msg in messages:
         norm = normalise(msg["text_raw"])
-        if not norm:
-            continue
 
-        total_msgs += 1
-        role = "[PRED]" if msg["is_pred"] else "[USER]"
+        if norm:
+            parts.append(norm)
 
-        if msg["is_pred"]:
-            matches  = _RULE_ENGINE.match(norm)
-            max_sev  = max((m.severity for m in matches), default=0)
-            cats_hit = {m.category for m in matches}
-
-            # Update category counts
-            for cat in cats_hit:
-                cat_counts[cat] = cat_counts.get(cat, 0) + 1
-
-            # Store for structural analysis
-            pred_msgs.append({
-                "conv_idx": conv_idx,
-                "max_sev":  max_sev,
-                "cats":     cats_hit,
-                "matches":  matches,
-            })
-
-            # Build rule tags (deduplicated per category+severity)
-            seen: set = set()
-            tags: list[str] = []
-            for m in matches:
-                key = (m.category, m.severity)
-                if key not in seen:
-                    seen.add(key)
-                    tags.append(f"[RULE:{m.category}:{m.severity}]")
-            rule_prefix = (" ".join(tags) + " ") if tags else ""
-            parts.append(f"{role} {rule_prefix}{norm}")
-        else:
-            parts.append(f"{role} {norm}")
-
-    # Compute full risk score
-    score, level, bd = _conv_risk_score(cat_counts, pred_msgs, total_msgs)
-
-    # Structural signal tokens
-    esc_tok = "[ESC:1]" if bd["escal"] > 0 else "[ESC:0]"
-    arc_tok = "[ARC:1]" if bd["arc"]   > 0 else "[ARC:0]"
-    dom_tok = "[DOM:1]" if bd["dominance"] > 0 else "[DOM:0]"
-
-    active_cats = sorted(cat_counts.keys())
-    cats_str    = ",".join(active_cats) if active_cats else "none"
-    prefix      = f"[RISK:{level}] [CATS:{cats_str}] {esc_tok} {arc_tok} {dom_tok}"
-
-    body = " [SEP] ".join(parts)
-    return f"{prefix} {body}" if body else prefix
-
+    return " [SEP] ".join(parts)
 
 # ---------------------------------------------------------------------------
 # Dataset helpers
