@@ -230,10 +230,9 @@ def load_split(dataset_path: str, name: str) -> tuple:
     path = Path(dataset_path) / f"{name}.json"
     with open(path, encoding = "utf-8") as f:
         records = json.load(f)
-
+ 
     texts  = [r["text"]  for r in records]
-    labels = [int(r["label"]) for r in records]
-
+    labels = [int(r.get("label", 0)) for r in records]
     return texts, labels
 
 ## ======= main ===============

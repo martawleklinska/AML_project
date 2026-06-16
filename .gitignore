@@ -2,3 +2,5 @@ data/
 pan12_dataset/test.json
 pan12_dataset/train.json
 pan12_dataset/val.json
+v2/AML_project/pan12_dataset/test.json
+v2/AML_project/pan12_dataset/train.json
